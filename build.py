@@ -1,13 +1,15 @@
 import subprocess
 import sys
 import re
+import os
+import time
+
+coarserange = 0.5
+finerange = 0.2
 
 def run(command):
     print(" ".join(command))
     subprocess.run(command, check=True)
-
-import os
-import time
 
 def wait_for_stable_file(filepath, poll_interval=1):
     """
@@ -190,8 +192,16 @@ def deskirt(input_file, output_file):
     with open(output_file, 'w') as outfile:
         outfile.write(modified_content)
 
-def generate_adjustment(output_file, config_munged, offset_array):
-    generate_gcode("23_general_adjust", config_munged, parameters="tags = [\n" + ",\n".join(['    "{:+.3f}"'.format(num) for num in offset_array]) + "\n];")
+def generate_adjustment(output_file, config_munged, offset_array, adjust = 0):
+    visarray = []
+    for num in offset_array:
+        show = num + adjust
+        if show < 0:
+            visarray += ["ERROR"]
+        else:
+            visarray += ["{:+.3f}".format(show)]
+
+    generate_gcode("23_general_adjust", config_munged, parameters="tags = [\n" + ",\n".join([f'"{item}"' for item in visarray]) + "\n];")
     offset("23_general_adjust_original.gcode", output_file, offset_array)
 
 if __name__ == "__main__":
@@ -205,7 +215,7 @@ if __name__ == "__main__":
     # prusaslicer outputs from far-away to near, which makes it hard to see what's going on, so we flip it around
     mirror_y("1_initial_adjust_original.gcode", "1_initial_adjust.gcode")
 
-    generate_adjustment("2_coarse_adjust.gcode", config_munged, [i * 0.05 for i in range(0, 11, 1)])
-    generate_adjustment("3_fine_adjust.gcode", config_munged, [i * 0.01 for i in range(0, 11, 1)])
+    generate_adjustment("2_coarse_adjust.gcode", config_munged, [i * coarserange / 10 + finerange / 2 for i in range(0, 11, 1)], -finerange / 2)
+    generate_adjustment("3_fine_adjust.gcode", config_munged, [i * finerange / 10 for i in range(0, 11, 1)])
 
 
