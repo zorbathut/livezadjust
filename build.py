@@ -204,6 +204,32 @@ def generate_adjustment(output_file, config_munged, offset_array, adjust = 0):
     generate_gcode("23_general_adjust", config_munged, parameters="tags = [\n" + ",\n".join([f'"{item}"' for item in visarray]) + "\n];")
     offset("23_general_adjust_original.gcode", output_file, offset_array)
 
+def add_pause(input_file, output_file):
+    """
+    Reads the content of input_file and writes it to output_file. 
+    Inserts "G4 S30" before the first occurrence of a line starting with "G1".
+    
+    Args:
+    - input_file (str): Path to the input file.
+    - output_file (str): Path to the output file.
+    """
+    
+    with open(input_file, 'r') as infile:
+        lines = infile.readlines()
+
+    # Flag to check if we've already inserted the line
+    inserted = False
+
+    with open(output_file, 'w') as outfile:
+        for line in lines:
+            if line.startswith("G1") and not inserted:
+                outfile.write("G4 S30\n")
+                inserted = True
+            outfile.write(line)
+
+# Example usage:
+# insert_line_on_G1('source.gcode', 'modified.gcode')
+
 if __name__ == "__main__":
     config = "config.petg.0.4mm.0.2mm.ini"
     config_munged = "config.ini"
@@ -216,6 +242,5 @@ if __name__ == "__main__":
     mirror_y("1_initial_adjust_original.gcode", "1_initial_adjust.gcode")
 
     generate_adjustment("2_coarse_adjust.gcode", config_munged, [i * coarserange / 10 + finerange / 2 for i in range(0, 11, 1)], -finerange / 2)
-    generate_adjustment("3_fine_adjust.gcode", config_munged, [i * finerange / 10 for i in range(0, 11, 1)])
-
-
+    generate_adjustment("3_fine_adjust_pauseless.gcode", config_munged, [i * finerange / 10 for i in range(0, 11, 1)])
+    add_pause("3_fine_adjust_pauseless.gcode", "3_fine_adjust.gcode")
