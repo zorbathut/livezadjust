@@ -1,0 +1,4 @@
+*.stl
+*.gcode
+config.ini
+intermediate.scad
