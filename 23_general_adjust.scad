@@ -7,7 +7,7 @@ count = 11;
 width = 10;
 gap = 2;
 fontsize=4;
-for (i = [0 : (count - 1)]){
+for (i = [0 : (len(tags) - 1)]){
     rotate([0, 0, -90])
         translate([i * (width + gap), 0, 0])
             difference() {

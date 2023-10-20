@@ -6,6 +6,7 @@ import time
 
 coarserange = 0.5
 finerange = 0.2
+ultrafinerange = 0.04
 
 def run(command):
     print(" ".join(command))
@@ -125,61 +126,66 @@ class UnionFind:
                 self.rank[root_y] += 1
 
 def offset(input_file, output_file, offset_array):
-    OFFSET = 7
-
     with open(input_file, 'r') as infile:
         content = infile.read()
 
-    matches = re.findall(r'Y(-?\d+\.\d+)', content)
-    numbers = [float(match) for match in matches if float(match) >= 10]
+    matches = re.findall(r'G1.*Y(-?\d+\.\d+)', content)
+    numbers = [float(match) for match in matches]
 
     if not numbers:
         return
 
-    clusters = []
-    cluster = [numbers[0]]
-    lowest_seen_y = numbers[0] - OFFSET
+    uf = UnionFind()
+    for num in numbers:
+        uf.make_set(num)
 
-    for num in numbers[1:]:
-        if num >= lowest_seen_y - 1:
-            cluster.append(num)
-            lowest_seen_y = min(lowest_seen_y, num)
-        else:
-            clusters.append(cluster)
-            cluster = [num]
-            lowest_seen_y = num - OFFSET
+    for i in range(len(numbers)):
+        for j in range(i + 1, len(numbers)):
+            if abs(numbers[i] - numbers[j]) < 1:
+                uf.union(numbers[i], numbers[j])
 
-    if cluster:
-        clusters.append(cluster)
+    clusters = {}
+    for num in numbers:
+        root = uf.find(num)
+        if root not in clusters:
+            clusters[root] = []
+        clusters[root].append(num)
+
+    clusters = [item for item in sorted(clusters.values(), key=lambda item: -min(item))]
+    for cluster in clusters:
+        print(f"Max: {max(cluster)}, Min: {min(cluster)}")
+    print(f"{len(clusters)} clusters found")
+
+    if len(clusters) != len(offset_array):
+        raise Exception("Number of clusters does not match number of offsets")
 
     current_cluster_index = -1
-    encountered_Y = False
-    last_z = 0
 
     with open(output_file, 'w') as outfile:
         for line in content.splitlines():
-            if "Y" in line and not encountered_Y:
-                y_value = re.search(r'Y(-?\d+\.\d+)', line)
-                if y_value and float(y_value.group(1)) >= 10:
-                    encountered_Y = True
-                    current_cluster_index = 0
-
-            if encountered_Y and current_cluster_index < len(clusters) and "Z" in line:
-                z_value = re.search(r'Z(-?\d*\.\d+)', line)
+            if current_cluster_index < len(clusters) and "Z" in line:
+                z_value = re.search(r'G1.*Z(-?\d*\.\d+)', line)
                 if z_value:
                     original_z = float(z_value.group(1))
-                    last_z = original_z
-                    modified_z = original_z + offset_array[current_cluster_index]
+                    if current_cluster_index != -1:
+                        modified_z = original_z + offset_array[current_cluster_index]
+                    else:
+                        modified_z = original_z
                     line = line.replace(f"Z{z_value.group(1)}", f"Z{modified_z:.3f}")
 
             outfile.write(line + "\n")
 
-            if encountered_Y and "Y" in line:
-                y_value = re.search(r'Y(-?\d+\.\d+)', line)
-                if y_value and float(y_value.group(1)) not in clusters[current_cluster_index]:
-                    outfile.write("; CLUSTER SHIFT\n")
-                    current_cluster_index += 1
-                    outfile.write(f"G1 Z{last_z + offset_array[current_cluster_index]}\n")
+            # Possibly shift to new cluster
+            y_value = re.search(r'G1.*Y(-?\d+\.\d+)', line)
+            if y_value:
+                y_value = float(y_value.group(1))
+                current_cluster_index = -1
+                for idx, cluster in enumerate(clusters):
+                    if y_value >= min(cluster)  and y_value <= max(cluster):
+                        if idx != current_cluster_index:
+                            outfile.write("; CLUSTER CHANGE\n")
+                            current_cluster_index = idx
+                        break
 
 def deskirt(input_file, output_file):
     with open(input_file, 'r') as infile:
@@ -196,10 +202,7 @@ def generate_adjustment(output_file, config_munged, offset_array, adjust = 0):
     visarray = []
     for num in offset_array:
         show = num + adjust
-        if show < 0:
-            visarray += ["ERROR"]
-        else:
-            visarray += ["{:+.3f}".format(show)]
+        visarray += ["{:+.3f}".format(show)]
 
     generate_gcode("23_general_adjust", config_munged, parameters="tags = [\n" + ",\n".join([f'"{item}"' for item in visarray]) + "\n];")
     offset("23_general_adjust_original.gcode", output_file, offset_array)
@@ -241,6 +244,10 @@ if __name__ == "__main__":
     # prusaslicer outputs from far-away to near, which makes it hard to see what's going on, so we flip it around
     mirror_y("1_initial_adjust_original.gcode", "1_initial_adjust.gcode")
 
-    generate_adjustment("2_coarse_adjust.gcode", config_munged, [i * coarserange / 10 + finerange / 2 for i in range(0, 11, 1)], -finerange / 2)
-    generate_adjustment("3_fine_adjust_pauseless.gcode", config_munged, [i * finerange / 10 for i in range(0, 11, 1)])
+    generate_adjustment("2_coarse_adjust.gcode", config_munged, [i * coarserange / 10 + finerange / 2 for i in range(0, 11, 1)])
+    
+    generate_adjustment("3_fine_adjust_pauseless.gcode", config_munged, [i * finerange / 10 - finerange / 2 for i in range(0, 11, 1)])
     add_pause("3_fine_adjust_pauseless.gcode", "3_fine_adjust.gcode")
+
+    generate_adjustment("4_ultrafine_adjust_pauseless.gcode", config_munged, [i * ultrafinerange / 16 - ultrafinerange / 2 for i in range(0, 17, 1)])
+    add_pause("4_ultrafine_adjust_pauseless.gcode", "4_ultrafine_adjust.gcode")
