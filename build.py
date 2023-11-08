@@ -198,6 +198,11 @@ def deskirt(input_file, output_file):
     with open(output_file, 'w') as outfile:
         outfile.write(modified_content)
 
+    first_layer_height = re.search(r"\bfirst_layer_height\s*=\s*(\d+\.\d+)", content).group(1)
+    layer_height = re.search(r"\blayer_height\s*=\s*(\d+\.\d+)", content).group(1)
+
+    return float(first_layer_height) + float(layer_height)
+
 def generate_adjustment(output_file, config_munged, offset_array, adjust = 0):
     visarray = []
     for num in offset_array:
@@ -237,9 +242,9 @@ if __name__ == "__main__":
     config = sys.argv[1]
     config_munged = "config.ini"
 
-    deskirt(config, config_munged)
+    initial_height = deskirt(config, config_munged)
 
-    generate_gcode("1_initial_adjust", config_munged)
+    generate_gcode("1_initial_adjust", config_munged, parameters=f"height = {initial_height};\n")
 
     # prusaslicer outputs from far-away to near, which makes it hard to see what's going on, so we flip it around
     mirror_y("1_initial_adjust_original.gcode", "1_initial_adjust.gcode")
