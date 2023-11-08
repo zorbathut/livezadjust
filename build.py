@@ -235,9 +235,6 @@ def add_pause(input_file, output_file):
                 inserted = True
             outfile.write(line)
 
-# Example usage:
-# insert_line_on_G1('source.gcode', 'modified.gcode')
-
 if __name__ == "__main__":
     config = sys.argv[1]
     config_munged = "config.ini"
@@ -252,7 +249,7 @@ if __name__ == "__main__":
     generate_adjustment("2_coarse_adjust.gcode", config_munged, [i * coarserange / 10 + finerange / 2 for i in range(0, 11, 1)])
     
     generate_adjustment("3_fine_adjust_pauseless.gcode", config_munged, [i * finerange / 10 - finerange / 2 for i in range(0, 11, 1)])
-    add_pause("3_fine_adjust_pauseless.gcode", "3_fine_adjust.gcode")
+    #add_pause("3_fine_adjust_pauseless.gcode", "3_fine_adjust.gcode")
 
     generate_adjustment("4_ultrafine_adjust_pauseless.gcode", config_munged, [i * ultrafinerange / 16 - ultrafinerange / 2 for i in range(0, 17, 1)])
-    add_pause("4_ultrafine_adjust_pauseless.gcode", "4_ultrafine_adjust.gcode")
+    #add_pause("4_ultrafine_adjust_pauseless.gcode", "4_ultrafine_adjust.gcode")
