@@ -234,7 +234,7 @@ def add_pause(input_file, output_file):
 # insert_line_on_G1('source.gcode', 'modified.gcode')
 
 if __name__ == "__main__":
-    config = "config.petg.0.4mm.0.2mm.ini"
+    config = sys.argv[1]
     config_munged = "config.ini"
 
     deskirt(config, config_munged)
