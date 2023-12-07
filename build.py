@@ -8,6 +8,8 @@ coarserange = 0.5
 finerange = 0.2
 ultrafinerange = 0.04
 
+tmpdir = "tmp"
+
 def run(command):
     print(" ".join(command))
     subprocess.run(command, check=True)
@@ -37,15 +39,13 @@ def wait_for_stable_file(filepath, poll_interval=1):
         else:
             last_size = current_size
 
-def generate_gcode(input_prefix, config_file, parameters=""):
-    original_scad = f"{input_prefix}.scad"
-    stl = f"{input_prefix}.stl"
-    gcode = f"{input_prefix}_original.gcode"
+def generate_gcode(input_file, output_file, config_file, parameters=""):
+    stl = f"{output_file}.stl"
 
-    target_scad = f"intermediate.scad"
+    target_scad = os.path.join(tmpdir, f"intermediate.scad")
 
-    # Prepend parameters to original_scad
-    with open(original_scad, "r") as f:
+    # Prepend parameters to input_file
+    with open(input_file, "r") as f:
         original_content = parameters + f.read()
     with open(target_scad, "w") as f:
         f.write(original_content)
@@ -54,17 +54,17 @@ def generate_gcode(input_prefix, config_file, parameters=""):
     try:
         run(["openscad", "-o", stl, target_scad, "-p", "parameters.scad"])
     except subprocess.CalledProcessError:
-        print(f"Error converting {original_scad} to STL.")
+        print(f"Error converting {input_file} to STL.")
         sys.exit(1)
 
     # Slice STL to GCODE using PrusaSlicer
     # PrusaSlicer, annoyingly, does not block, so we do a dance to ensure the file has been written fully
-    if os.path.exists(gcode):
-        os.remove(gcode)
+    if os.path.exists(output_file):
+        os.remove(output_file)
 
     try:
-        run(["flatpak", "run", "com.prusa3d.PrusaSlicer", "--load", config_file, "-g", "-o", gcode, stl])
-        wait_for_stable_file(gcode)
+        run(["flatpak", "run", "com.prusa3d.PrusaSlicer", "--load", config_file, "-g", "-o", output_file, stl])
+        wait_for_stable_file(output_file)
     except subprocess.CalledProcessError:
         print(f"Error slicing {stl} to gcode.")
         sys.exit(1)
@@ -197,20 +197,21 @@ def deskirt(input_file, output_file):
     # Write the modified content to the output file
     with open(output_file, 'w') as outfile:
         outfile.write(modified_content)
+    
+    def parseParam(param):
+        return float(re.search(r"\b" + param + r"\s*=\s*(\d+\.\d+)", content).group(1))
 
-    first_layer_height = re.search(r"\bfirst_layer_height\s*=\s*(\d+\.\d+)", content).group(1)
-    layer_height = re.search(r"\blayer_height\s*=\s*(\d+\.\d+)", content).group(1)
+    return parseParam("first_layer_height") + parseParam("layer_height") * 2, parseParam("nozzle_diameter")
 
-    return float(first_layer_height) + float(layer_height)
-
-def generate_adjustment(output_file, config_munged, offset_array, adjust = 0):
+def generate_adjustment(output_file, config_munged, offset_array, params = "", adjust = 0):
     visarray = []
     for num in offset_array:
         show = num + adjust
         visarray += ["{:+.3f}".format(show)]
 
-    generate_gcode("23_general_adjust", config_munged, parameters="tags = [\n" + ",\n".join([f'"{item}"' for item in visarray]) + "\n];")
-    offset("23_general_adjust_original.gcode", output_file, offset_array)
+    intermediate = os.path.join(tmpdir, "intermediate.scad")
+    generate_gcode("23_general_adjust.scad", intermediate, config_munged, parameters= params + "tags = [\n" + ",\n".join([f'"{item}"' for item in visarray]) + "\n];")
+    offset(intermediate, output_file, offset_array)
 
 def add_pause(input_file, output_file):
     """
@@ -237,19 +238,26 @@ def add_pause(input_file, output_file):
 
 if __name__ == "__main__":
     config = sys.argv[1]
-    config_munged = "config.ini"
+    outputdir = sys.argv[2]
 
-    initial_height = deskirt(config, config_munged)
+    tmpdir = os.path.join("tmp", outputdir)
+    os.makedirs(tmpdir, exist_ok=True)
 
-    generate_gcode("1_initial_adjust", config_munged, parameters=f"height = {initial_height};\n")
+    config_munged = os.path.join(tmpdir, "config.ini")
+
+    initial_height, nozzle_diameter = deskirt(config, config_munged)
+    scale = min(max(nozzle_diameter / 0.4, 1.0), 1.1)   # in an ideal world we could switch to multi column, but we can't atm
+
+    initial_adjust_tmp = os.path.join(tmpdir, "1_initial_adjust.gcode")
+    generate_gcode("1_initial_adjust.scad", initial_adjust_tmp, config_munged, parameters=f"height = {initial_height};\n")
 
     # prusaslicer outputs from far-away to near, which makes it hard to see what's going on, so we flip it around
-    mirror_y("1_initial_adjust_original.gcode", "1_initial_adjust.gcode")
+    mirror_y(initial_adjust_tmp, os.path.join(outputdir, "1_initial_adjust.gcode"))
 
-    generate_adjustment("2_coarse_adjust.gcode", config_munged, [i * coarserange / 10 + finerange / 2 for i in range(0, 11, 1)])
+    generate_adjustment(os.path.join(outputdir, "2_coarse_adjust.gcode"), config_munged, [i * coarserange / 10 + finerange / 2 for i in range(0, 11, 1)], f"scale = {scale};")
     
-    generate_adjustment("3_fine_adjust_pauseless.gcode", config_munged, [i * finerange / 10 - finerange / 2 for i in range(0, 11, 1)])
+    generate_adjustment(os.path.join(outputdir, "3_fine_adjust_pauseless.gcode"), config_munged, [i * finerange / 10 - finerange / 2 for i in range(0, 11, 1)], f"scale = {scale};")
     #add_pause("3_fine_adjust_pauseless.gcode", "3_fine_adjust.gcode")
 
-    generate_adjustment("4_ultrafine_adjust_pauseless.gcode", config_munged, [i * ultrafinerange / 16 - ultrafinerange / 2 for i in range(0, 17, 1)])
+    generate_adjustment(os.path.join(outputdir, "4_ultrafine_adjust_pauseless.gcode"), config_munged, [i * ultrafinerange / 16 - ultrafinerange / 2 for i in range(0, 17, 1)], f"scale = {scale};")
     #add_pause("4_ultrafine_adjust_pauseless.gcode", "4_ultrafine_adjust.gcode")

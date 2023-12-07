@@ -1,4 +1,4 @@
-*.stl
-*.gcode
 config.ini
-intermediate.scad
+
+/tmp
+/output
