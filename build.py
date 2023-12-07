@@ -213,29 +213,6 @@ def generate_adjustment(output_file, config_munged, offset_array, params = "", a
     generate_gcode("23_general_adjust.scad", intermediate, config_munged, parameters= params + "tags = [\n" + ",\n".join([f'"{item}"' for item in visarray]) + "\n];")
     offset(intermediate, output_file, offset_array)
 
-def add_pause(input_file, output_file):
-    """
-    Reads the content of input_file and writes it to output_file. 
-    Inserts "G4 S30" before the first occurrence of a line starting with "G1".
-    
-    Args:
-    - input_file (str): Path to the input file.
-    - output_file (str): Path to the output file.
-    """
-    
-    with open(input_file, 'r') as infile:
-        lines = infile.readlines()
-
-    # Flag to check if we've already inserted the line
-    inserted = False
-
-    with open(output_file, 'w') as outfile:
-        for line in lines:
-            if line.startswith("G1") and not inserted:
-                outfile.write("G4 S30\n")
-                inserted = True
-            outfile.write(line)
-
 if __name__ == "__main__":
     config = sys.argv[1]
     outputdir = sys.argv[2]
@@ -256,8 +233,6 @@ if __name__ == "__main__":
 
     generate_adjustment(os.path.join(outputdir, "2_coarse_adjust.gcode"), config_munged, [i * coarserange / 10 + finerange / 2 for i in range(0, 11, 1)], f"scale = {scale};")
     
-    generate_adjustment(os.path.join(outputdir, "3_fine_adjust_pauseless.gcode"), config_munged, [i * finerange / 10 - finerange / 2 for i in range(0, 11, 1)], f"scale = {scale};")
-    #add_pause("3_fine_adjust_pauseless.gcode", "3_fine_adjust.gcode")
+    generate_adjustment(os.path.join(outputdir, "3_fine_adjust.gcode"), config_munged, [i * finerange / 10 - finerange / 2 for i in range(0, 11, 1)], f"scale = {scale};")
 
-    generate_adjustment(os.path.join(outputdir, "4_ultrafine_adjust_pauseless.gcode"), config_munged, [i * ultrafinerange / 16 - ultrafinerange / 2 for i in range(0, 17, 1)], f"scale = {scale};")
-    #add_pause("4_ultrafine_adjust_pauseless.gcode", "4_ultrafine_adjust.gcode")
+    generate_adjustment(os.path.join(outputdir, "4_ultrafine_adjust.gcode"), config_munged, [i * ultrafinerange / 16 - ultrafinerange / 2 for i in range(0, 17, 1)], f"scale = {scale};")

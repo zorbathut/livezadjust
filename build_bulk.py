@@ -4,13 +4,13 @@ import pprint
 import subprocess
 
 items = [
-    ("config.petg.0.25mm.0.1mm.ini", "0.25mm/petg"),
-    ("config.petg.0.40mm.0.2mm.ini", "0.40mm/petg"),
-    ("config.petg.0.60mm.0.3mm.ini", "0.60mm/petg"),
+    ("config.petg.0.25mm.0.1mm.ini", "0.25mm-petg"),
+    ("config.petg.0.40mm.0.2mm.ini", "0.40mm-petg"),
+    ("config.petg.0.60mm.0.3mm.ini", "0.60mm-petg"),
 
-    ("config.pla.0.25mm.0.1mm.ini", "0.25mm/pla"),
-    ("config.pla.0.40mm.0.2mm.ini", "0.40mm/pla"),
-    ("config.pla.0.60mm.0.3mm.ini", "0.60mm/pla"),
+    ("config.pla.0.25mm.0.1mm.ini", "0.25mm-pla"),
+    ("config.pla.0.40mm.0.2mm.ini", "0.40mm-pla"),
+    ("config.pla.0.60mm.0.3mm.ini", "0.60mm-pla"),
 ]
 
 # List to hold the subprocesses
